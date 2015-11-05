@@ -50,62 +50,60 @@ bool getRobotPose(
   const tf::TransformListener& tf_listener,
   const std::string& robot_frame,
   const std::string& global_frame,
+  const ros::Duration& timeout,
   geometry_msgs::PoseStamped& robot_pose 
 )
 {
-
-  tf::Stamped < tf::Pose > local_pose, global_pose;
-  global_pose.setIdentity();
+  tf::Stamped < tf::Pose > local_pose;
   local_pose.setIdentity();
   local_pose.frame_id_ = robot_frame;
-  local_pose.stamp_ = ros::Time();
-
-  // get the global pose of the robot
-  try
-  {
-    tf_listener.transformPose(global_frame, local_pose, global_pose);
-  }
-  catch (tf::LookupException& ex)
-  {
-    ROS_ERROR_THROTTLE(1.0, "No Transform available Error looking up robot pose: %s\n", ex.what());
-    return false;
-  }
-  catch (tf::ConnectivityException& ex)
-  {
-    ROS_ERROR_THROTTLE(1.0, "Connectivity Error looking up robot pose: %s\n", ex.what());
-    return false;
-  }
-  catch (tf::ExtrapolationException& ex)
-  {
-    ROS_ERROR_THROTTLE(1.0, "Extrapolation Error looking up robot pose: %s\n", ex.what());
-    return false;
-  }
-  tf::poseStampedTFToMsg(global_pose, robot_pose);
-
-  return true;
+  local_pose.stamp_ = ros::Time::now();
+  geometry_msgs::PoseStamped local_pose_msg;
+  tf::poseStampedTFToMsg(local_pose, local_pose_msg);
+  return robot_navigation_state::transformPose(
+    tf_listener,
+    global_frame,
+    local_pose.stamp_,
+    timeout,
+    local_pose_msg,
+    global_frame,
+    robot_pose);
 }
 
-bool toGlobalFrame(
+bool transformPose(
     const tf::TransformListener& tf_listener,
-    const std::string& global_frame,
+    const std::string& target_frame,
+    const ros::Time& target_time,
+    const ros::Duration& timeout,
     const geometry_msgs::PoseStamped& in,
-    geometry_msgs::PoseStamped& out 
+    const std::string& fixed_frame,
+    geometry_msgs::PoseStamped& out
 ){
-  tf::Stamped<tf::Pose> in_tf_pose, global_pose;
-  tf::poseStampedMsgToTF(in, in_tf_pose);
+  std::string error_msg;
 
-  //just get the latest available transform... for accuracy they should send
-  in_tf_pose.stamp_ = ros::Time();
-
-  try{
-    tf_listener.transformPose(global_frame, in_tf_pose, global_pose);
-  }
-  catch(tf::TransformException& ex){
-    ROS_WARN("Failed to transform the goal pose from %s into the %s frame: %s",
-        in_tf_pose.frame_id_.c_str(), global_frame.c_str(), ex.what());
+  bool success = tf_listener.waitForTransform(
+    target_frame,
+    in.header.frame_id,
+    in.header.stamp,
+    timeout,
+    ros::Duration(0.01),
+    &error_msg   
+  );
+  
+  if(!success){
+    ROS_WARN("Failed to look up transform from %s into the %s frame: %s",
+    in.header.frame_id.c_str(), target_frame.c_str(), error_msg.c_str());
     return false;
   }
-  tf::poseStampedTFToMsg(global_pose, out);
+    
+  try{
+    tf_listener.transformPose(target_frame, target_time, in, fixed_frame, out);
+  }
+  catch(tf::TransformException& ex){
+    ROS_WARN("Failed to transform pose from %s into the %s frame: %s",
+      in.header.frame_id.c_str(), target_frame.c_str(), ex.what());
+    return false;
+  }
   return true;
 }
 

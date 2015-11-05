@@ -80,10 +80,13 @@ namespace moving{
   };
 }
 
-bool toGlobalFrame(
+bool transformPose(
   const tf::TransformListener& tf_listener,
-  const std::string& global_frame,
+  const std::string& target_frame,
+  const ros::Time& target_time,
+  const ros::Duration& timeout,
   const geometry_msgs::PoseStamped& in,
+  const std::string& fixed_frame,
   geometry_msgs::PoseStamped& out
 );
 
@@ -91,9 +94,10 @@ bool getRobotPose(
   const tf::TransformListener& tf_listener,
   const std::string& robot_frame,
   const std::string& global_frame,
+  const ros::Duration& timeout,
   geometry_msgs::PoseStamped& robot_pose
 );
 
-}; /* namespace robot_navigation_state */
+} /* namespace robot_navigation_state */
 
 #endif /* robot_navigation_state.h */
